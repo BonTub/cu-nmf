@@ -40,7 +40,9 @@ int maxiterMain = 500;      //max iter number of main problem
 int maxiterSub = 100;       //max iter number of sub problem
 
 cusparseHandle_t handle_sparse = 0;
-cusparseMatDescr_t descr_sparse = 0;
+cusparseMatDescr_t descr_sparseold = 0;
+cusparseSpMatDescr_t descr_sparse = 0;
+
 cublasHandle_t handle_blas = 0;
 cudaError_t cudaStat;       //for cuda errors
 dim3 threadsPerBlock(16);
@@ -154,7 +156,8 @@ void shipping(){
 
     /* setup cusparse and cublas library */
     cusparseCreate(&handle_sparse);
-    cusparseCreateMatDescr(&descr_sparse);
+    //cusparseCreateMatDescr(&descr_sparse);
+    cusparseCreateSpMatDescr(&descr_sparse);
     cusparseSetMatType(descr_sparse,CUSPARSE_MATRIX_TYPE_GENERAL);
     cusparseSetMatIndexBase(descr_sparse,CUSPARSE_INDEX_BASE_ZERO);
     cublasCreate(&handle_blas);
@@ -198,7 +201,23 @@ real subprob(real *V, cusparseOperation_t transV, int rowV, int colV, real *W, r
     int iter = 0;
     for(iter = 1; iter <= maxiter2; iter++){
         //VtW = V'*W
-        cusparseScsrmm(handle_sparse, transV, rowV, nn, colV, lineNumber, &one, descr_sparse, V, VRow, VCol, W, mm, &zero, VtW, kk);
+        //cusparseScsrmm(handle_sparse, transV, rowV, nn, colV, lineNumber, &one, descr_sparse, V, VRow, VCol, W, mm, &zero, VtW, kk);
+	    /*
+	    cusparseSpMM(cusparseHandle_t           handle
+	    ,		  cusparseOperation_t        opA CUSPARSE_OPERATION_NON_TRANSPOSE
+	    ,		  cusparseOperation_t        opB CUSPARSE_OPERATION_NON_TRANSPOSE
+	    ,             const void*                alpha &one
+	    ,             const cusparseSpMatDescr_t matA V'
+	    ,             const cusparseDnMatDescr_t matB W
+	    ,             const void*                beta &one
+	    ,             cusparseDnMatDescr_t       matC VtW
+	    ,             cudaDataType               computeType  CUDA_R_16F
+	    ,             cusparseSpMMAlg_t          alg CUSPARSE_SPMM_ALG_DEFAULT
+	    ,             void*                      externalBuffer)
+        */
+cusparseSpMM(handle_sparse , transV ,CUSPARSE_OPERATION_NON_TRANSPOSE ,&one , rowV,W , &one ,VtW ,             CUDA_R_16F , CUSPARSE_SPMM_ALG_DEFAULT , externalBuffer);
+
+	//cusparseSpMM(handle_sparse, transV, rowV, nn, colV, lineNumber, &one, descr_sparse, V, VRow, VCol, W, mm, &zero, VtW, kk);
         //WtV = (VtW)'
         cublasSgeam(handle_blas, CUBLAS_OP_T, CUBLAS_OP_N, nn, kk, &one, VtW, kk, &zero, WtV, nn, WtV, nn);
         //WtW = W'*W;
